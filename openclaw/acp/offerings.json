@@ -1,0 +1,94 @@
+{
+  "seller": {
+    "name": "PrintLab 3D Printing Service",
+    "description": "Automated 3D printing on a Bambu Lab X1C via search, slice, and print pipeline."
+  },
+  "offerings": [
+    {
+      "id": "search-3d-models",
+      "name": "Search 3D Models",
+      "description": "Search Thingiverse for printable 3D models by keyword. Returns model names, thumbnails, likes, and IDs.",
+      "price": 0,
+      "endpoint": "POST /api/search",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string", "description": "Search keywords (e.g. 'dragon figurine')"},
+          "limit": {"type": "integer", "default": 5, "description": "Max results to return"}
+        },
+        "required": ["query"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {"type": "string"},
+                "name": {"type": "string"},
+                "url": {"type": "string"},
+                "thumbnail": {"type": "string"},
+                "author": {"type": "string"},
+                "likes": {"type": "integer"},
+                "downloads": {"type": "integer"}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "print-3d-model",
+      "name": "Print a 3D Model",
+      "description": "Download, slice, and print a 3D model on a Bambu Lab X1C. Accepts a Thingiverse model ID or direct file URL. Returns success/failure with error details.",
+      "price": 1,
+      "price_unit": "VIRTUAL",
+      "endpoint": "POST /api/print",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "model_id": {"type": "string", "description": "Thingiverse thing ID"},
+          "model_url": {"type": "string", "description": "Direct download URL for .stl or .3mf file"},
+          "filename": {"type": "string", "description": "Filename to save as"},
+          "ams_mapping": {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "AMS tray indices for filament selection"
+          }
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"}
+        }
+      }
+    },
+    {
+      "id": "get-printer-status",
+      "name": "Get Printer Status",
+      "description": "Check the current state of the 3D printer: idle, printing progress, temperatures, remaining time, errors.",
+      "price": 0,
+      "endpoint": "GET /api/status",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "state": {"type": "string", "enum": ["IDLE", "PRINTING", "PAUSED", "FINISHED", "PREPARING", "ERROR"]},
+          "progress": {"type": "integer"},
+          "current_layer": {"type": "integer"},
+          "total_layers": {"type": "integer"},
+          "remaining_time": {"type": "integer", "description": "Minutes remaining"},
+          "bed_temp": {"type": "number"},
+          "nozzle_temp": {"type": "number"},
+          "error_message": {"type": "string"}
+        }
+      }
+    }
+  ]
+}

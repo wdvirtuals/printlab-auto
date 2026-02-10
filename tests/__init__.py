@@ -1,0 +1,1 @@
+"""PrintLab Auto tests."""
