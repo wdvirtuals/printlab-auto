@@ -418,6 +418,59 @@ class Slicer:
         else:
             temp_path.unlink(missing_ok=True)
 
+    def _patch_nozzle_type(self, path_3mf: Path, nozzle_type: str) -> None:
+        """Patch the nozzle_type inside a sliced 3MF to match the printer.
+
+        After firmware updates, Bambu printers may report nozzle types using
+        product codes (e.g. 'HX01') instead of generic names ('hardened_steel').
+        This patches project_settings.config AND gcode comment headers so the
+        printer doesn't reject the file.
+        """
+        if not nozzle_type:
+            return
+
+        import json as json_mod
+        import re
+        temp_path = path_3mf.with_suffix('.nozzle_patched.3mf')
+        patched = False
+
+        with zipfile.ZipFile(path_3mf, 'r') as zin:
+            with zipfile.ZipFile(temp_path, 'w', zipfile.ZIP_DEFLATED) as zout:
+                for item in zin.namelist():
+                    data = zin.read(item)
+
+                    if item.endswith('project_settings.config'):
+                        try:
+                            j = json_mod.loads(data)
+                            old_type = j.get('nozzle_type')
+                            if old_type and old_type != nozzle_type:
+                                j['nozzle_type'] = nozzle_type
+                                data = json_mod.dumps(j, indent=4).encode()
+                                patched = True
+                        except Exception:
+                            pass
+
+                    elif item.endswith('.gcode'):
+                        text = data.decode('utf-8', errors='ignore')
+                        new_text = re.sub(
+                            r'^(; nozzle_type = ).+$',
+                            rf'\g<1>{nozzle_type}',
+                            text,
+                            flags=re.MULTILINE,
+                        )
+                        if new_text != text:
+                            data = new_text.encode('utf-8')
+                            patched = True
+
+                    zout.writestr(item, data)
+
+        if patched:
+            import os
+            os.replace(temp_path, path_3mf)
+            print(f"Patched nozzle_type → {nozzle_type}")
+        else:
+            temp_path.unlink(missing_ok=True)
+
     async def _run_slicer(self, cmd: list[str], output_path: Path) -> Optional[Path]:
         """Run slicer command and return output path if successful."""
         print(f"Running slicer: {' '.join(cmd)}")

@@ -214,6 +214,7 @@ class X1CClient:
         self._connected = False
         self._status: Optional[PrinterStatus] = None
         self._ams_trays: list[AmsTray] = []
+        self._nozzle_type: Optional[str] = None
         self._status_callbacks: list[Callable[[PrinterStatus], None]] = []
         self._loop: Optional[asyncio.AbstractEventLoop] = None
 
@@ -243,6 +244,10 @@ class X1CClient:
             data = json.loads(msg.payload.decode())
             if "print" in data:
                 self._status = PrinterStatus.from_mqtt(data)
+                # Capture nozzle type from printer
+                reported_nozzle = data["print"].get("nozzle_type")
+                if reported_nozzle:
+                    self._nozzle_type = reported_nozzle
                 # Parse AMS data if present
                 ams_data = data["print"].get("ams")
                 if ams_data and "ams" in ams_data:
@@ -460,10 +465,31 @@ class X1CClient:
                         "vibration_cali": True,
                         "layer_inspect": False,
                         "use_ams": True,
-                        "ams_mapping": ams_mapping if ams_mapping is not None else "",
+                        "ams_mapping": ams_mapping if ams_mapping is not None else [0],
                     }
                 }
             )
+
+            # Auto-resume if printer pauses for firmware warnings (e.g. nozzle
+            # type mismatch after firmware updates).  Wait a few seconds for the
+            # print to start, then check if it landed in PAUSE and send resume.
+            for _ in range(30):  # up to 6 seconds
+                await asyncio.sleep(0.2)
+                if self._status and self._status.state == "PRINTING":
+                    break
+            if self._status and self._status.state == "PAUSED":
+                print("Auto-resuming paused print (firmware warning dismissed)")
+                await asyncio.sleep(2)
+                self._sequence_id += 1
+                self._publish_command(
+                    {
+                        "print": {
+                            "sequence_id": str(self._sequence_id),
+                            "command": "resume",
+                            "param": "",
+                        }
+                    }
+                )
 
             return True
 
